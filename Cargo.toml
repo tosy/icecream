@@ -1,7 +1,6 @@
 [workspace]
 members = [
-    "capture",
-    "codec",
+    "media",
+    "icecream",
     "util",
 ]
-
