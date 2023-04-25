@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "capture",
+    "codec",
+    "util",
+    "icecream",
+]
+

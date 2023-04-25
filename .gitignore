@@ -16,3 +16,8 @@
 
 builddir
 .vscode
+target
+build
+.idea
+.DS_Store
+
