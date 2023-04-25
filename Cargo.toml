@@ -3,6 +3,5 @@ members = [
     "capture",
     "codec",
     "util",
-    "icecream",
 ]
 
