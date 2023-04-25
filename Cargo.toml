@@ -1,6 +1,0 @@
-[workspace]
-members = [
-    "media",
-    "icecream",
-    "util",
-]
