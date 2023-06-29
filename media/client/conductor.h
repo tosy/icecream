@@ -23,6 +23,7 @@
 #include "examples/peerconnection/client/peer_connection_client.h"
 #include "rtc_base/thread.h"
 
+
 namespace webrtc {
 class VideoCaptureModule;
 }  // namespace webrtc

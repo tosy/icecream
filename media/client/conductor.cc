@@ -52,14 +52,8 @@
 #include "rtc_base/strings/json.h"
 #include "test/vcm_capturer.h"
 
-// #include "api/audio_codecs/audio_decoder_factory_template.h"
-// #include "api/audio_codecs/audio_encoder_factory_template.h"
-// #if WEBRTC_USE_BUILTIN_OPUS
-// #include "api/audio_codecs/opus/audio_encoder_multi_channel_opus.h"
-// #include "api/audio_codecs/opus/audio_encoder_opus.h"  // nogncheck
-// #include "api/audio_codecs/opus/audio_decoder_multi_channel_opus.h"
-// #include "api/audio_codecs/opus/audio_decoder_opus.h"  // nogncheck
-// #endif
+#include "modules/desktop_capture/desktop_capturer.h"
+#include "modules/desktop_capture/desktop_capture_options.h"
 
 namespace {
 // Names used for a IceCandidate JSON object.
@@ -85,6 +79,92 @@ class DummySetSessionDescriptionObserver
   }
 };
 
+
+class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
+                           webrtc::DesktopCapturer::Callback {
+ public:
+  static DesktopVideoSource* Create() {
+      RTC_LOG(LS_INFO) << "TOSY DesktopVideoSource Create";
+      
+      webrtc::DesktopCaptureOptions options = webrtc::DesktopCaptureOptions::CreateDefault();
+      options.set_allow_wgc_capturer(true);
+      options.set_allow_directx_capturer(true);
+
+      auto dcapture = webrtc::DesktopCapturer::CreateScreenCapturer(options);
+      // init dcapture
+      webrtc::DesktopCapturer::SourceList sources;
+      dcapture->GetSourceList(&sources);
+      if (0 == sources.size()) {
+        RTC_LOG(LS_INFO) << "TOSY DesktopVideoSource sources size 0";
+        //TODO
+        return nullptr;
+      }
+      RTC_LOG(LS_INFO) << "TOSY DesktopVideoSource sources size"
+                       << sources.size();
+      for (auto s : sources) {
+        RTC_LOG(LS_INFO) << "TOSY DesktopVideoSource sourceid " << s.id;
+      }
+      dcapture->SelectSource(sources[0].id);
+      return new DesktopVideoSource(std::move(dcapture));
+    }
+
+    int GetFrameWidth() const override { return static_cast<int>(width_); }
+    int GetFrameHeight() const override { return static_cast<int>(height_); }
+    ~DesktopVideoSource() {}
+
+    DesktopVideoSource(const DesktopVideoSource&) = delete;
+    DesktopVideoSource() = delete;
+
+   protected:
+
+    explicit DesktopVideoSource(std::unique_ptr<webrtc::DesktopCapturer> dcapture)
+        : dcapture_(std::move(dcapture)) {
+        width_ = 1920;
+        height_ = 1080;
+        dcapture_->Start(this);
+        //TODO LOOP
+        //dcapture_->CaptureFrame();
+    } 
+    
+    void OnCaptureResult(webrtc::DesktopCapturer::Result result,
+                         std::unique_ptr<webrtc::DesktopFrame> frame) override {
+        //TODO
+        RTC_LOG(LS_INFO) << "TOSY OnCaptureResult need convert" ;
+
+        //TestVideoCapturer::OnFrame(frame);
+    }
+    size_t width_;
+    size_t height_;
+    std::unique_ptr<webrtc::DesktopCapturer> dcapture_;
+};
+
+class DesktopCapturerTrackSource : public webrtc::VideoTrackSource {
+public:
+  static rtc::scoped_refptr<DesktopCapturerTrackSource> Create(
+      rtc::Thread* thread) {
+    
+      std::unique_ptr<DesktopVideoSource> dsource =
+      thread->BlockingCall([&]() { 
+          std::unique_ptr<DesktopVideoSource> dvs(DesktopVideoSource::Create());
+          return dvs;
+      });
+    
+      return rtc::make_ref_counted<DesktopCapturerTrackSource>(std::move(dsource));
+  }
+
+protected:
+  explicit DesktopCapturerTrackSource(
+      std::unique_ptr<DesktopVideoSource> dsource)
+      : VideoTrackSource(false), dsource_(std::move(dsource)) {}
+
+private:
+  rtc::VideoSourceInterface<webrtc::VideoFrame>* source() override {
+      return dsource_.get();
+  }
+  std::unique_ptr<DesktopVideoSource> dsource_;
+};
+
+
 class CapturerTrackSource : public webrtc::VideoTrackSource {
  public:
   static rtc::scoped_refptr<CapturerTrackSource> Create(rtc::Thread * thread) {
@@ -98,12 +178,24 @@ class CapturerTrackSource : public webrtc::VideoTrackSource {
       return nullptr;
     }
     int num_devices = info->NumberOfDevices();
+
+    // TOSY TEST
+    for (int i = 0; i < num_devices; ++i) {
+        char name[128] = {0};
+        info->GetDeviceName(i, name, sizeof(name), nullptr, 0);
+        RTC_LOG(LS_INFO) << " TOSY TEST deivce " << name;
+    }
     for (int i = 0; i < num_devices; ++i) {
         //TOSY TEST
-      thread->BlockingCall([&]() {
+        /*
         capturer = absl::WrapUnique(
             webrtc::test::VcmCapturer::Create(kWidth, kHeight, kFps, i));
-      });
+       */
+      capturer = thread->BlockingCall([&]() {
+        return absl::WrapUnique(
+            webrtc::test::VcmCapturer::Create(kWidth, kHeight, kFps, i));
+      }); 
+      
       if (capturer) {
         return rtc::make_ref_counted<CapturerTrackSource>(std::move(capturer));
       }
@@ -158,9 +250,7 @@ bool Conductor::InitializePeerConnection() {
       nullptr /* network_thread */, nullptr /* worker_thread */,
       signaling_thread_.get(), nullptr /* default_adm */,
       webrtc::CreateBuiltinAudioEncoderFactory(),
-      // webrtc::CreateAudioEncoderFactory<webrtc::AudioEncoderOpus, webrtc::AudioEncoderMultiChannelOpus>(),
       webrtc::CreateBuiltinAudioDecoderFactory(),
-      // webrtc::CreateAudioDecoderFactory<webrtc::AudioDecoderOpus, webrtc::AudioDecoderMultiChannelOpus>(),
       std::make_unique<webrtc::VideoEncoderFactoryTemplate<
           webrtc::LibvpxVp8EncoderTemplateAdapter
           // ,
@@ -485,21 +575,34 @@ void Conductor::ConnectToPeer(int peer_id) {
     peer_id_ = peer_id;
     peer_connection_->CreateOffer(
         this, webrtc::PeerConnectionInterface::RTCOfferAnswerOptions());
+    RTC_LOG(LS_INFO) << "CreateOffer over";
   } else {
     main_wnd_->MessageBox("Error", "Failed to initialize PeerConnection", true);
   }
 }
+
+rtc::scoped_refptr<DesktopCapturerTrackSource> desktop_video_device = nullptr;
 
 void Conductor::AddTracks() {
   if (!peer_connection_->GetSenders().empty()) {
     return;  // Already added tracks.
   }
 
+  desktop_video_device =
+      DesktopCapturerTrackSource::Create(signaling_thread_.get());
+
+  /*
   rtc::scoped_refptr<webrtc::AudioTrackInterface> audio_track(
       peer_connection_factory_->CreateAudioTrack(
           kAudioLabel,
           peer_connection_factory_->CreateAudioSource(cricket::AudioOptions())
               .get()));
+*/
+  rtc::scoped_refptr<webrtc::AudioTrackInterface> audio_track = 
+      peer_connection_factory_->CreateAudioTrack(kAudioLabel,
+          peer_connection_factory_->CreateAudioSource(cricket::AudioOptions()).get());
+
+
   auto result_or_error = peer_connection_->AddTrack(audio_track, {kStreamId});
   if (!result_or_error.ok()) {
     RTC_LOG(LS_ERROR) << "Failed to add audio track to PeerConnection: "
@@ -509,8 +612,9 @@ void Conductor::AddTracks() {
   rtc::scoped_refptr<CapturerTrackSource> video_device =
      CapturerTrackSource::Create(signaling_thread_.get());
   if (video_device) {
-    rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track_(
-        peer_connection_factory_->CreateVideoTrack(video_device, kVideoLabel));
+    rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track_ = 
+        peer_connection_factory_->CreateVideoTrack(video_device, kVideoLabel);
+
     main_wnd_->StartLocalRenderer(video_track_.get());
 
     result_or_error = peer_connection_->AddTrack(video_track_, {kStreamId});
