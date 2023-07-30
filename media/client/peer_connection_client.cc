@@ -107,6 +107,19 @@ void PeerConnectionClient::Connect(const std::string& server,
   server_address_.SetPort(port);
   client_name_ = client_name;
 
+  client_thread_->PostTask([this]() {
+    if (server_address_.IsUnresolvedIP()) {
+      state_ = RESOLVING;
+      resolver_ = new rtc::AsyncResolver();
+      resolver_->SignalDone.connect(this,
+                                    &PeerConnectionClient::OnResolveResult);
+      resolver_->Start(server_address_);
+    } else {
+      DoConnect();
+    }
+  });
+
+  /*
   if (server_address_.IsUnresolvedIP()) {
     state_ = RESOLVING;
     resolver_ = new rtc::AsyncResolver();
@@ -114,10 +127,11 @@ void PeerConnectionClient::Connect(const std::string& server,
     resolver_->Start(server_address_);
   } else {
     //tosy in mythread
-    logThreadPointer("click to Do Connect");
+    //logThreadPointer("click to Do Connect");
     client_thread_->PostTask([this]() { this->DoConnect(); });
 //    DoConnect();
   }
+  */
 }
 
 void PeerConnectionClient::OnResolveResult(

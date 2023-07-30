@@ -24,9 +24,11 @@ const wchar_t MainWnd::kClassName[] = L"WebRTC_MainWnd";
 
 namespace {
 
+
 const char kConnecting[] = "Connecting... ";
 const char kNoVideoStreams[] = "(no video streams either way)";
 const char kNoIncomingStream[] = "(no incoming video)";
+
 
 void CalculateWindowSizeForText(HWND wnd,
                                 const wchar_t* text,
@@ -232,9 +234,10 @@ void MainWnd::QueueUIThreadCallback(int msg_id, void* data) {
 }
 
 void MainWnd::OnPaint() {
+ 
   PAINTSTRUCT ps;
   ::BeginPaint(handle(), &ps);
-
+  
   RECT rc;
   ::GetClientRect(handle(), &rc);
 
@@ -324,6 +327,7 @@ void MainWnd::OnPaint() {
   }
 
   ::EndPaint(handle(), &ps);
+
 }
 
 void MainWnd::OnDestroyed() {
