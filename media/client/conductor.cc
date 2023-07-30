@@ -345,18 +345,18 @@ bool Conductor::InitializePeerConnection() {
       webrtc::CreateBuiltinAudioEncoderFactory(),
       webrtc::CreateBuiltinAudioDecoderFactory(),
       std::make_unique<webrtc::VideoEncoderFactoryTemplate<
-          webrtc::LibvpxVp8EncoderTemplateAdapter
+          //webrtc::LibvpxVp8EncoderTemplateAdapter
           // ,
           // webrtc::LibvpxVp9EncoderTemplateAdapter,
           // webrtc::OpenH264EncoderTemplateAdapter,
-          // webrtc::LibaomAv1EncoderTemplateAdapter
+           webrtc::LibaomAv1EncoderTemplateAdapter
           >>(),
       std::make_unique<webrtc::VideoDecoderFactoryTemplate<
-          webrtc::LibvpxVp8DecoderTemplateAdapter
+          //webrtc::LibvpxVp8DecoderTemplateAdapter
           // ,
           // webrtc::LibvpxVp9DecoderTemplateAdapter,
           // webrtc::OpenH264DecoderTemplateAdapter,
-          // webrtc::Dav1dDecoderTemplateAdapter
+           webrtc::Dav1dDecoderTemplateAdapter
           >>(),
       nullptr /* audio_mixer */, nullptr /* audio_processing */);
 
@@ -423,7 +423,7 @@ bool Conductor::CreatePeerConnection() {
     //tosy test set bitrate 10m
     webrtc::BitrateSettings bit_setting;
     bit_setting.min_bitrate_bps = 80,000,000;
-//    bit_setting.max_bitrate_bps = 80000000 * 5;
+    bit_setting.max_bitrate_bps = 80,000,000;
     bit_setting.start_bitrate_bps = 80,000,000;
     peer_connection_->SetBitrate(bit_setting);
   }
