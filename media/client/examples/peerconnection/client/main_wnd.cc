@@ -614,6 +614,7 @@ void MainWnd::VideoRenderer::SetSize(int width, int height) {
   image_.reset(new uint8_t[bmi_.bmiHeader.biSizeImage]);
 }
 
+//tosy TODO change rend OnFrame logic to sdl2
 void MainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
   {
     AutoLock<VideoRenderer> lock(this);

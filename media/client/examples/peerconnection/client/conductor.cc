@@ -58,6 +58,7 @@
 #include "api/task_queue/default_task_queue_factory.h"
 #include "third_party/libyuv/include/libyuv.h"
 #include "api/video/i420_buffer.h"
+#include "sdk\media_constraints.h"
 
 namespace {
 // Names used for a IceCandidate JSON object.
@@ -136,7 +137,7 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
         static std::unique_ptr<webrtc::TaskQueueFactory> factory =
             webrtc::CreateDefaultTaskQueueFactory(nullptr);
         worker_queue_.reset(new rtc::TaskQueue(factory->CreateTaskQueue(
-            "dvs-capture-thread", webrtc::TaskQueueFactory::Priority::NORMAL)));
+            "dvs-capture-thread", webrtc::TaskQueueFactory::Priority::NORMAL)));      //tosy todo N or High?
         //start loop task
         worker_queue_->PostTask([&] {
           LoopCaptureInThread();
@@ -147,8 +148,9 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
         if (worker_queue_.get()) {
             int64_t cur = rtc::TimeMillis();
             int64_t pastms = cur - last_;
-            if (pastms >= duration_) {
+            if (pastms >= duration_ - last_diff_cost_) {  // backg delay!
                 last_ = cur;
+              last_diff_cost_ = pastms - (duration_ - last_diff_cost_);
                 worker_queue_->PostTask([&] {
                     dcapture_->CaptureFrame();
                     counts_second_++;
@@ -163,10 +165,18 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
                   counts_second_ = 0;
                 }
             } else {
+                //process in back thread timer has delay cost! this no delay but cup cost too high.
+                /*
+                worker_queue_->PostTask([&] {
+                  LoopCaptureInThread();
+                });
+                */
                 //RTC_LOG(LS_INFO) << "TOSY Loop duration_-pastms::" << duration_ - pastms;
-                worker_queue_->PostDelayedTask([&]() {
-                    LoopCaptureInThread();
-                },webrtc::TimeDelta::Millis(duration_-pastms));
+                worker_queue_->PostDelayedHighPrecisionTask(
+                    [&]() {
+                    LoopCaptureInThread(); },
+                    webrtc::TimeDelta::Millis(duration_ - last_diff_cost_ - pastms));
+                    
             }
         }
     }
@@ -183,8 +193,8 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
         // convert to video_frame
         int width = frame->size().width();
         int height = frame->size().height();
-//        width_ = width;
-//        height_ = height;
+        width_ = width;
+        height_ = height;
 
         rtc::scoped_refptr<webrtc::I420Buffer> i420_buffer =
             webrtc::I420Buffer::Create(width, height);
@@ -195,11 +205,11 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
             i420_buffer->StrideV(), 0, 0, width, height, width, height,
             libyuv::kRotate0, libyuv::FOURCC_ARGB);
 
-        rtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = i420_buffer->Scale(width_, height_);
+//        rtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = i420_buffer->Scale(width_, height_);
   
         webrtc::VideoFrame videoFrame =
             webrtc::VideoFrame::Builder()
-                .set_video_frame_buffer(buffer)
+                .set_video_frame_buffer(i420_buffer)  // i420_buffer  buffer
                 .set_timestamp_rtp(0)
                 .set_timestamp_ms(rtc::TimeMillis())
                 .set_rotation(webrtc::kVideoRotation_0)
@@ -224,9 +234,10 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
     //var for multi-threads
     volatile size_t width_ = 1920;
     volatile size_t height_ = 1080;
-    volatile int64_t duration_ = 1000/60;   //1000ms / 60fps
+    volatile int64_t duration_ = 1000/30;   //1000ms / 60fps
+    volatile int64_t last_diff_cost_ = 0;   //1000ms / 60fps
     //var for thread task
-    int64_t last_;
+    volatile int64_t last_;
     int64_t counts_second_;
     int64_t pastms_sum_;
 };
@@ -244,8 +255,10 @@ public:
     
       return rtc::make_ref_counted<DesktopCapturerTrackSource>(std::move(dsource));
   }
+  //tosy test
+  bool is_screencast() const override { return true; }
 
-protected:
+ protected:
   explicit DesktopCapturerTrackSource(
       std::unique_ptr<DesktopVideoSource> dsource)
      : VideoTrackSource(/*remote*/ false), dsource_(std::move(dsource)) {}
@@ -345,18 +358,18 @@ bool Conductor::InitializePeerConnection() {
       webrtc::CreateBuiltinAudioEncoderFactory(),
       webrtc::CreateBuiltinAudioDecoderFactory(),
       std::make_unique<webrtc::VideoEncoderFactoryTemplate<
-          //webrtc::LibvpxVp8EncoderTemplateAdapter
+          webrtc::LibvpxVp8EncoderTemplateAdapter
           // ,
           // webrtc::LibvpxVp9EncoderTemplateAdapter,
           // webrtc::OpenH264EncoderTemplateAdapter,
-           webrtc::LibaomAv1EncoderTemplateAdapter
+          // webrtc::LibaomAv1EncoderTemplateAdapter
           >>(),
       std::make_unique<webrtc::VideoDecoderFactoryTemplate<
-          //webrtc::LibvpxVp8DecoderTemplateAdapter
+          webrtc::LibvpxVp8DecoderTemplateAdapter
           // ,
           // webrtc::LibvpxVp9DecoderTemplateAdapter,
           // webrtc::OpenH264DecoderTemplateAdapter,
-           webrtc::Dav1dDecoderTemplateAdapter
+          // webrtc::Dav1dDecoderTemplateAdapter
           >>(),
       nullptr /* audio_mixer */, nullptr /* audio_processing */);
 
@@ -393,8 +406,6 @@ bool Conductor::ReinitializePeerConnectionForLoopback() {
     peer_connection_->CreateOffer(
         this, webrtc::PeerConnectionInterface::RTCOfferAnswerOptions());
   }
-  options.disable_encryption = false;
-  peer_connection_factory_->SetOptions(options);
   return peer_connection_ != nullptr;
 }
 
@@ -402,9 +413,11 @@ bool Conductor::CreatePeerConnection() {
   RTC_DCHECK(peer_connection_factory_);
   RTC_DCHECK(!peer_connection_);
 
+  /*
   webrtc::PeerConnectionFactoryInterface::Options options;
   options.disable_encryption = true;
   peer_connection_factory_->SetOptions(options);
+  */
 
   webrtc::PeerConnectionInterface::RTCConfiguration config;
   config.sdp_semantics = webrtc::SdpSemantics::kUnifiedPlan;
@@ -414,17 +427,30 @@ bool Conductor::CreatePeerConnection() {
 //  server.uri = GetPeerConnectionString();
 //  config.servers.push_back(server);
 
+  /*
+  const webrtc::MediaConstraints constraints_screencast(
+      {webrtc::MediaConstraints::Constraint(
+          webrtc::MediaConstraints::kScreencastMinBitrate,
+                                    "80000000")},
+      {});
+  CopyConstraintsIntoRtcConfiguration(&constraints_screencast, &config);
+  */
+
+  // tosy test
+  //config.screencast_min_bitrate = 8000000;
+  config.media_config.video.enable_send_packet_batching = true;
+
   webrtc::PeerConnectionDependencies pc_dependencies(this);
   auto error_or_peer_connection =
       peer_connection_factory_->CreatePeerConnectionOrError(
           config, std::move(pc_dependencies));
   if (error_or_peer_connection.ok()) {
     peer_connection_ = std::move(error_or_peer_connection.value());
-    //tosy test set bitrate 10m
+    //tosy test bitrate 10m
     webrtc::BitrateSettings bit_setting;
-    bit_setting.min_bitrate_bps = 80,000,000;
-    bit_setting.max_bitrate_bps = 80,000,000;
-    bit_setting.start_bitrate_bps = 80,000,000;
+    bit_setting.min_bitrate_bps = 3000000;
+    bit_setting.max_bitrate_bps = 50000000;
+    bit_setting.start_bitrate_bps = 3000000;
     peer_connection_->SetBitrate(bit_setting);
   }
   return peer_connection_ != nullptr;
@@ -711,19 +737,29 @@ void Conductor::AddTracks() {
   }
   */
 
-//  rtc::scoped_refptr<CapturerTrackSource> video_device =
-//     CapturerTrackSource::Create(signaling_thread_.get());
-
-  rtc::scoped_refptr<DesktopCapturerTrackSource> video_device =
-      DesktopCapturerTrackSource::Create(signaling_thread_.get());
-
+  rtc::scoped_refptr<webrtc::VideoTrackSource> video_device;
+  static bool bTestClient = false;
+  if (bTestClient) {
+    video_device =
+        CapturerTrackSource::Create(signaling_thread_.get());
+  } else {
+    video_device =
+        DesktopCapturerTrackSource::Create(signaling_thread_.get());
+  }
+  
   if (video_device) {
     rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track_ = 
         peer_connection_factory_->CreateVideoTrack(video_device, kVideoLabel);
 
     //TOSY TEST 
-//    main_wnd_->StartLocalRenderer(video_track_.get());
-
+    if (bTestClient) {
+        main_wnd_->StartLocalRenderer(video_track_.get());
+    }
+    /*   not work
+    auto vp = std::vector<webrtc::RtpEncodingParameters>(1, webrtc::RtpEncodingParameters{});
+    vp[0].min_bitrate_bps = 80000000;
+    vp[0].max_bitrate_bps= 100000000;
+    */
     auto result_or_error = peer_connection_->AddTrack(video_track_, {kStreamId});
     if (!result_or_error.ok()) {
       RTC_LOG(LS_ERROR) << "Failed to add video track to PeerConnection: "
@@ -816,13 +852,17 @@ void Conductor::UIThreadCallback(int msg_id, void* data) {
 
 void Conductor::OnSuccess(webrtc::SessionDescriptionInterface* desc) {
   RTC_LOG(LS_INFO) << __FUNCTION__ << " " << rtc::Thread::Current();
-  //TOSY TEST
-  peer_connection_->SetLocalDescription(
-      DummySetSessionDescriptionObserver::Create().get(), desc);
-
   std::string sdp;
   desc->ToString(&sdp);
+  sdp = sdp.append("b=AS:10000\r\n");
+
   RTC_LOG(LS_INFO) << "Local sdp " << sdp;
+  std::unique_ptr<webrtc::SessionDescriptionInterface> newDesc = 
+      CreateSessionDescription(webrtc::SdpType::kOffer, sdp);
+  //TOSY TEST
+  peer_connection_->SetLocalDescription(
+      DummySetSessionDescriptionObserver::Create().get(), newDesc.release());  // desc
+
 
   // For loopback test. To save some connecting delay.
   if (loopback_) {

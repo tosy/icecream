@@ -161,8 +161,8 @@ std::vector<VideoCodec> GetPayloadTypesAndDefaultCodecs(
     return std::vector<VideoCodec>();
 
   //tosy test
-//  supported_formats.push_back(webrtc::SdpVideoFormat(kRedCodecName));
-//  supported_formats.push_back(webrtc::SdpVideoFormat(kUlpfecCodecName));
+  supported_formats.push_back(webrtc::SdpVideoFormat(kRedCodecName));
+  supported_formats.push_back(webrtc::SdpVideoFormat(kUlpfecCodecName));
 
   // flexfec-03 is supported as
   // - receive codec unless WebRTC-FlexFEC-03-Advertised is disabled

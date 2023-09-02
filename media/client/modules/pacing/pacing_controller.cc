@@ -311,7 +311,7 @@ bool PacingController::ShouldSendKeepalive(Timestamp now) const {
 }
 
 Timestamp PacingController::NextSendTime() const {
-    //tosy test make pacer like nopacer
+  // tosy test make video nopacer
   Timestamp leading_send_time =
       packet_queue_.LeadingPacketEnqueueTime(RtpPacketMediaType::kVideo);
   if (leading_send_time.IsFinite()) {
@@ -346,7 +346,7 @@ Timestamp PacingController::NextSendTime() const {
   }
 
   if (adjusted_media_rate_ > DataRate::Zero() && !packet_queue_.Empty()) {
-    RTC_LOG(LS_INFO) << " TOSY TEST NextSendTime 111 ";
+    //RTC_LOG(LS_INFO) << " TOSY TEST NextSendTime 111 ";
     // If packets are allowed to be sent in a burst, the
     // debt is allowed to grow up to one packet more than what can be sent
     // during 'send_burst_period_'.
@@ -370,7 +370,7 @@ Timestamp PacingController::NextSendTime() const {
     }
     next_send_time = last_process_time_ + drain_time;
   } else {
-    RTC_LOG(LS_INFO) << " TOSY TEST NextSendTime 333 ";
+    //RTC_LOG(LS_INFO) << " TOSY TEST NextSendTime 333 ";
     // Nothing to do.
     next_send_time = last_process_time_ + kPausedProcessInterval;
   }
@@ -496,15 +496,16 @@ void PacingController::ProcessPackets() {
                        transport_overhead_per_packet_;
       }
       //tosy test
-      webrtc::Timestamp t = rtp_packet->capture_time();
+      //webrtc::Timestamp t = rtp_packet->capture_time();
       
       packet_sender_->SendPacket(std::move(rtp_packet), pacing_info);
 
       //TOSY TEST
+      /*
       if (t.IsFinite()) {
         RTC_LOG(LS_INFO) << "TOSY PacingController::ProcessPackets::packet_sender_->SendPacket cost :: "
                          << rtc::TimeMillis() - t.ms();
-      }
+      }*/
   
       for (auto& packet : packet_sender_->FetchFec()) {
         EnqueuePacket(std::move(packet));
