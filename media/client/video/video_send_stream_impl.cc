@@ -168,9 +168,8 @@ absl::optional<float> GetConfiguredPacingFactor(
     const PacingConfig& default_pacing_config) {
   if (!TransportSeqNumExtensionConfigured(config))
     return absl::nullopt;
-
-  return absl::nullopt;
-  //tosy test bitrate stop alr
+  // tosy test bitrate stop alr
+  return absl::nullopt;  
   /*
   absl::optional<AlrExperimentSettings> alr_settings =
       GetAlrSettings(content_type);

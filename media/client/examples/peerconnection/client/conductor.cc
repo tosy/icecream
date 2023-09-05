@@ -234,7 +234,7 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
     //var for multi-threads
     volatile size_t width_ = 1920;
     volatile size_t height_ = 1080;
-    volatile int64_t duration_ = 1000/30;   //1000ms / 60fps
+    volatile int64_t duration_ = 1000/60;   //1000ms / 60fps
     volatile int64_t last_diff_cost_ = 0;   //1000ms / 60fps
     //var for thread task
     volatile int64_t last_;
@@ -255,8 +255,8 @@ public:
     
       return rtc::make_ref_counted<DesktopCapturerTrackSource>(std::move(dsource));
   }
-  //tosy test
-  bool is_screencast() const override { return true; }
+  //tosy test is_screencast ??? true ???
+  bool is_screencast() const override { return false; }
 
  protected:
   explicit DesktopCapturerTrackSource(
@@ -358,18 +358,18 @@ bool Conductor::InitializePeerConnection() {
       webrtc::CreateBuiltinAudioEncoderFactory(),
       webrtc::CreateBuiltinAudioDecoderFactory(),
       std::make_unique<webrtc::VideoEncoderFactoryTemplate<
-          webrtc::LibvpxVp8EncoderTemplateAdapter
+          //webrtc::LibvpxVp8EncoderTemplateAdapter
           // ,
           // webrtc::LibvpxVp9EncoderTemplateAdapter,
-          // webrtc::OpenH264EncoderTemplateAdapter,
-          // webrtc::LibaomAv1EncoderTemplateAdapter
+          // webrtc::OpenH264EncoderTemplateAdapter
+           webrtc::LibaomAv1EncoderTemplateAdapter
           >>(),
       std::make_unique<webrtc::VideoDecoderFactoryTemplate<
-          webrtc::LibvpxVp8DecoderTemplateAdapter
+          //webrtc::LibvpxVp8DecoderTemplateAdapter
           // ,
           // webrtc::LibvpxVp9DecoderTemplateAdapter,
-          // webrtc::OpenH264DecoderTemplateAdapter,
-          // webrtc::Dav1dDecoderTemplateAdapter
+          // webrtc::OpenH264DecoderTemplateAdapter
+           webrtc::Dav1dDecoderTemplateAdapter
           >>(),
       nullptr /* audio_mixer */, nullptr /* audio_processing */);
 
@@ -408,6 +408,8 @@ bool Conductor::ReinitializePeerConnectionForLoopback() {
   }
   return peer_connection_ != nullptr;
 }
+
+static bool bTestClient = false;
 
 bool Conductor::CreatePeerConnection() {
   RTC_DCHECK(peer_connection_factory_);
@@ -448,9 +450,16 @@ bool Conductor::CreatePeerConnection() {
     peer_connection_ = std::move(error_or_peer_connection.value());
     //tosy test bitrate 10m
     webrtc::BitrateSettings bit_setting;
-    bit_setting.min_bitrate_bps = 3000000;
-    bit_setting.max_bitrate_bps = 50000000;
-    bit_setting.start_bitrate_bps = 3000000;
+    if (!bTestClient) {
+      bit_setting.min_bitrate_bps = 3000000;
+      bit_setting.max_bitrate_bps = 10000000;
+      bit_setting.start_bitrate_bps = 3000000;
+    } else {
+      webrtc::BitrateSettings bit_setting;
+      bit_setting.min_bitrate_bps = 30000;
+      bit_setting.max_bitrate_bps = 2500000;
+      bit_setting.start_bitrate_bps = 30000;
+    }
     peer_connection_->SetBitrate(bit_setting);
   }
   return peer_connection_ != nullptr;
@@ -738,10 +747,8 @@ void Conductor::AddTracks() {
   */
 
   rtc::scoped_refptr<webrtc::VideoTrackSource> video_device;
-  static bool bTestClient = false;
   if (bTestClient) {
-    video_device =
-        CapturerTrackSource::Create(signaling_thread_.get());
+    video_device = CapturerTrackSource::Create(signaling_thread_.get());
   } else {
     video_device =
         DesktopCapturerTrackSource::Create(signaling_thread_.get());
@@ -854,15 +861,16 @@ void Conductor::OnSuccess(webrtc::SessionDescriptionInterface* desc) {
   RTC_LOG(LS_INFO) << __FUNCTION__ << " " << rtc::Thread::Current();
   std::string sdp;
   desc->ToString(&sdp);
-  sdp = sdp.append("b=AS:10000\r\n");
+  //tosy test bitrate
+//  sdp = sdp.append("b=AS:10000\r\n");
 
   RTC_LOG(LS_INFO) << "Local sdp " << sdp;
-  std::unique_ptr<webrtc::SessionDescriptionInterface> newDesc = 
-      CreateSessionDescription(webrtc::SdpType::kOffer, sdp);
+//  std::unique_ptr<webrtc::SessionDescriptionInterface> newDesc = 
+//      CreateSessionDescription(webrtc::SdpType::kOffer, sdp);
+
   //TOSY TEST
   peer_connection_->SetLocalDescription(
-      DummySetSessionDescriptionObserver::Create().get(), newDesc.release());  // desc
-
+      DummySetSessionDescriptionObserver::Create().get(), desc);  // desc   //newDesc.release()
 
   // For loopback test. To save some connecting delay.
   if (loopback_) {

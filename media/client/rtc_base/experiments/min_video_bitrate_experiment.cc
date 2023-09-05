@@ -20,7 +20,7 @@
 namespace webrtc {
 
 //tosy test bitrate 3m
-const int kDefaultMinVideoBitrateBps = 3000000;       //30000
+const int kDefaultMinVideoBitrateBps = 30000;  // 3000000;       //30000
 
 namespace {
 const char kForcedFallbackFieldTrial[] =
