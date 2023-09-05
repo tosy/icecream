@@ -1,0 +1,3 @@
+gn gen --ide=vs2022 E:\workspace\projects\debug "--args=is_debug=true rtc_enable_protobuf=false rtc_include_tests=false rtc_build_tools=false rtc_build_examples=true rtc_use_h264=false enable_libaom=true rtc_enable_google_benchmarks=false rtc_include_ilbc=false optimize_for_size=true rtc_libvpx_build_vp9=false rtc_include_dav1d_in_internal_decoder_factory=true"
+
+autoninja -C E:\workspace\projects\debug examples
