@@ -473,6 +473,15 @@ void VideoSendStreamImpl::OnEncoderConfigurationChanged(
     int min_transmit_bitrate_bps) {
   // Currently called on the encoder TQ
   RTC_DCHECK(!worker_queue_->IsCurrent());
+  for (const auto& stream : streams) {
+    // tosy test stream.max_bitrate_bps
+    if (50000000 > stream.max_bitrate_bps) {
+      RTC_LOG(LS_INFO) << " TOSY TEST "
+                          "VideoSendStreamImpl::OnEncoderConfigurationChanged "
+                          "stream.max_bitrate_bps "
+                       << stream.max_bitrate_bps;
+    }
+  }
   auto closure = [this, streams = std::move(streams), is_svc, content_type,
                   min_transmit_bitrate_bps]() mutable {
     RTC_DCHECK_GE(config_->rtp.ssrcs.size(), streams.size());
@@ -582,6 +591,9 @@ uint32_t VideoSendStreamImpl::OnBitrateUpdated(BitrateAllocationUpdate update) {
   RTC_DCHECK_RUN_ON(&thread_checker_);
   RTC_DCHECK(rtp_video_sender_->IsActive())
       << "VideoSendStream::Start has not been called.";
+
+  //tosy test bitrate when DownScaling
+  RTC_LOG(LS_INFO) << " TOSY TEST VideoSendStreamImpl::OnBitrateUpdated target_bitrate " << update.target_bitrate;
 
   // When the BWE algorithm doesn't pass a stable estimate, we'll use the
   // unstable one instead.

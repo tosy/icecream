@@ -679,8 +679,16 @@ void FrameCadenceAdapterImpl::OnFrame(const VideoFrame& frame) {
     const int frames_scheduled_for_processing =
         frames_scheduled_for_processing_.fetch_sub(1,
                                                    std::memory_order_relaxed);
+    //tosy test
+    /*
+    if (frame.width() != 1920) {
+      RTC_LOG(LS_INFO) << "TOSY test FrameCadenceAdapterImpl::OnFrame "
+                       << frame.width() << " " << frame.height();
+    }
+    */
     OnFrameOnMainQueue(post_time, frames_scheduled_for_processing,
                        std::move(frame));
+
     MaybeReportFrameRateConstraintUmas();
   }));
 }

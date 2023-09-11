@@ -280,7 +280,8 @@ void MainWnd::OnPaint() {
 
       StretchDIBits(dc_mem, x, y, width, height, 0, 0, width, height, image,
                     &bmi, DIB_RGB_COLORS, SRCCOPY);
-
+      //tosy test no local show
+      /*
       if ((rc.right - rc.left) > 200 && (rc.bottom - rc.top) > 200) {
         const BITMAPINFO& bmi = local_renderer->bmi();
         image = local_renderer->image();
@@ -292,6 +293,7 @@ void MainWnd::OnPaint() {
                       -bmi.bmiHeader.biHeight, image, &bmi, DIB_RGB_COLORS,
                       SRCCOPY);
       }
+      */
 
       BitBlt(ps.hdc, 0, 0, logical_area.x, logical_area.y, dc_mem, 0, 0,
              SRCCOPY);

@@ -234,6 +234,8 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
     //var for multi-threads
     volatile size_t width_ = 1920;
     volatile size_t height_ = 1080;
+//    volatile size_t width_ = 1280;
+//    volatile size_t height_ = 720;
     volatile int64_t duration_ = 1000/60;   //1000ms / 60fps
     volatile int64_t last_diff_cost_ = 0;   //1000ms / 60fps
     //var for thread task
@@ -358,18 +360,18 @@ bool Conductor::InitializePeerConnection() {
       webrtc::CreateBuiltinAudioEncoderFactory(),
       webrtc::CreateBuiltinAudioDecoderFactory(),
       std::make_unique<webrtc::VideoEncoderFactoryTemplate<
-          //webrtc::LibvpxVp8EncoderTemplateAdapter
+          webrtc::LibvpxVp8EncoderTemplateAdapter
           // ,
           // webrtc::LibvpxVp9EncoderTemplateAdapter,
           // webrtc::OpenH264EncoderTemplateAdapter
-           webrtc::LibaomAv1EncoderTemplateAdapter
+          // webrtc::LibaomAv1EncoderTemplateAdapter
           >>(),
       std::make_unique<webrtc::VideoDecoderFactoryTemplate<
-          //webrtc::LibvpxVp8DecoderTemplateAdapter
+          webrtc::LibvpxVp8DecoderTemplateAdapter
           // ,
           // webrtc::LibvpxVp9DecoderTemplateAdapter,
           // webrtc::OpenH264DecoderTemplateAdapter
-           webrtc::Dav1dDecoderTemplateAdapter
+          // webrtc::Dav1dDecoderTemplateAdapter
           >>(),
       nullptr /* audio_mixer */, nullptr /* audio_processing */);
 
@@ -409,6 +411,7 @@ bool Conductor::ReinitializePeerConnectionForLoopback() {
   return peer_connection_ != nullptr;
 }
 
+//tosy test
 static bool bTestClient = false;
 
 bool Conductor::CreatePeerConnection() {
@@ -440,7 +443,8 @@ bool Conductor::CreatePeerConnection() {
 
   // tosy test
   //config.screencast_min_bitrate = 8000000;
-  config.media_config.video.enable_send_packet_batching = true;
+  config.media_config.video.enable_send_packet_batching = false;
+  config.media_config.video.enable_cpu_adaptation = false;
 
   webrtc::PeerConnectionDependencies pc_dependencies(this);
   auto error_or_peer_connection =
@@ -743,8 +747,7 @@ void Conductor::AddTracks() {
   if (!result_or_error.ok()) {
     RTC_LOG(LS_ERROR) << "Failed to add audio track to PeerConnection: "
                       << result_or_error.error().message();
-  }
-  */
+  }*/
 
   rtc::scoped_refptr<webrtc::VideoTrackSource> video_device;
   if (bTestClient) {
