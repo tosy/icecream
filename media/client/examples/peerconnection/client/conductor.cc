@@ -188,13 +188,13 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
             return;
         }
 
-//        int64_t cur = rtc::TimeMillis();
+        int64_t cur = rtc::TimeMillis();
 
         // convert to video_frame
         int width = frame->size().width();
         int height = frame->size().height();
-        width_ = width;
-        height_ = height;
+//        width_ = width;
+//        height_ = height;
 
         rtc::scoped_refptr<webrtc::I420Buffer> i420_buffer =
             webrtc::I420Buffer::Create(width, height);
@@ -206,7 +206,7 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
             libyuv::kRotate0, libyuv::FOURCC_ARGB);
 
 //        rtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = i420_buffer->Scale(width_, height_);
-  
+
         webrtc::VideoFrame videoFrame =
             webrtc::VideoFrame::Builder()
                 .set_video_frame_buffer(i420_buffer)  // i420_buffer  buffer
@@ -219,27 +219,30 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
         absl::optional<webrtc::Timestamp> cti(webrtc::Timestamp::Millis(rtc::TimeMillis()));
         videoFrame.set_capture_time_identifier(cti);
 
-        // covert 2ms. capture 0~2ms. raw data capture cost 2~4ms.
-        // codec 10ms average.
-        //TODO 2ms cost !! no convert go hwcodec ??!!
-        // best way  make host resolution as same as you want send.
-//        RTC_LOG(LS_INFO) << "TOSY convert cost :: " << rtc::TimeMillis() - cur;
-//        RTC_LOG(LS_INFO) << "TOSY capture cost :: " << frame->capture_time_ms();
-
         TestVideoCapturer::OnFrame(videoFrame);
+        
+        nTestCount_++;
+        nTestSum_ += rtc::TimeMillis() - cur;
+        if (nTestCount_ >= 120) {
+            RTC_LOG(LS_INFO)
+                << "TOSY test OnCaptureResult::cost " << nTestSum_ / nTestCount_;
+            nTestCount_ = 0;
+            nTestSum_ = 0;
+        }
     }
+    int nTestCount_ = 0;
+    int nTestSum_ = 0;
+
     webrtc::Mutex lock_;
     std::unique_ptr<webrtc::DesktopCapturer> dcapture_;
     std::unique_ptr<rtc::TaskQueue> worker_queue_;
-    //var for multi-threads
-    volatile size_t width_ = 1920;
-    volatile size_t height_ = 1080;
-//    volatile size_t width_ = 1280;
-//    volatile size_t height_ = 720;
-    volatile int64_t duration_ = 1000/60;   //1000ms / 60fps
+
+    volatile size_t width_ = 1280;
+    volatile size_t height_ = 720;
+    volatile int64_t duration_ = 1000/80;   //1000ms / 60fps
     volatile int64_t last_diff_cost_ = 0;   //1000ms / 60fps
-    //var for thread task
     volatile int64_t last_;
+
     int64_t counts_second_;
     int64_t pastms_sum_;
 };
@@ -749,7 +752,8 @@ void Conductor::AddTracks() {
                       << result_or_error.error().message();
   }*/
 
-  rtc::scoped_refptr<webrtc::VideoTrackSource> video_device;
+  
+  rtc::scoped_refptr<webrtc::VideoTrackSource> video_device = nullptr;
   if (bTestClient) {
     video_device = CapturerTrackSource::Create(signaling_thread_.get());
   } else {
@@ -757,14 +761,20 @@ void Conductor::AddTracks() {
         DesktopCapturerTrackSource::Create(signaling_thread_.get());
   }
   
+//  rtc::scoped_refptr<webrtc::VideoTrackSource> video_device =
+//      DesktopCapturerTrackSource::Create(signaling_thread_.get());
+  
   if (video_device) {
     rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track_ = 
         peer_connection_factory_->CreateVideoTrack(video_device, kVideoLabel);
 
-    //TOSY TEST 
+//    main_wnd_->StartLocalRenderer(video_track_.get());
+    // TOSY TEST 
+    
     if (bTestClient) {
         main_wnd_->StartLocalRenderer(video_track_.get());
     }
+
     /*   not work
     auto vp = std::vector<webrtc::RtpEncodingParameters>(1, webrtc::RtpEncodingParameters{});
     vp[0].min_bitrate_bps = 80000000;

@@ -647,6 +647,8 @@ void FrameCadenceAdapterImpl::ProcessKeyFrameRequest() {
     zero_hertz_adapter_->ProcessKeyFrameRequest();
 }
 
+int nTestCount = 0;
+int nTestSum = 0;
 void FrameCadenceAdapterImpl::OnFrame(const VideoFrame& frame) {
   // This method is called on the network thread under Chromium, or other
   // various contexts in test.
@@ -654,17 +656,17 @@ void FrameCadenceAdapterImpl::OnFrame(const VideoFrame& frame) {
   RTC_DLOG(LS_VERBOSE) << "FrameCadenceAdapterImpl::" << __func__ << " this "
                        << this;
 
-  // Local time in webrtc time base.
-  Timestamp post_time = clock_->CurrentTime();
   int nProcessTasks =
       frames_scheduled_for_processing_.fetch_add(1, std::memory_order_relaxed);
-  
   if (nProcessTasks >= 1) {
     // tosy test dropframe before encoder task thread...
     frames_scheduled_for_processing_.fetch_sub(1, std::memory_order_relaxed);
     //RTC_LOG(LS_INFO) << "TOSY dropframe before encoder task thread ;" << nProcessTasks;
     return;
   }
+  // Local time in webrtc time base.
+  Timestamp post_time = clock_->CurrentTime();
+
   queue_->PostTask(SafeTask(safety_.flag(), [this, post_time, frame] {
     RTC_DCHECK_RUN_ON(queue_);
     if (zero_hertz_adapter_created_timestamp_.has_value()) {
@@ -675,21 +677,27 @@ void FrameCadenceAdapterImpl::OnFrame(const VideoFrame& frame) {
           "WebRTC.Screenshare.ZeroHz.TimeUntilFirstFrameMs",
           time_until_first_frame.ms());
     }
-
+    /*
     const int frames_scheduled_for_processing =
         frames_scheduled_for_processing_.fetch_sub(1,
                                                    std::memory_order_relaxed);
-    //tosy test
-    /*
-    if (frame.width() != 1920) {
-      RTC_LOG(LS_INFO) << "TOSY test FrameCadenceAdapterImpl::OnFrame "
-                       << frame.width() << " " << frame.height();
-    }
-    */
-    OnFrameOnMainQueue(post_time, frames_scheduled_for_processing,
+                                                   */
+    OnFrameOnMainQueue(post_time, 1,          //frames_scheduled_for_processing
                        std::move(frame));
 
     MaybeReportFrameRateConstraintUmas();
+
+    frames_scheduled_for_processing_.fetch_sub(1, std::memory_order_relaxed);
+
+    // tosy test
+    nTestCount++;
+    nTestSum += rtc::TimeMillis() - post_time.ms();
+    if (nTestCount >= 120) {
+      RTC_LOG(LS_INFO) << "TOSY test FrameCadenceAdapterImpl::OnFrame::cost "
+                       << nTestSum / nTestCount;
+      nTestCount = 0;
+      nTestSum = 0;
+    }
   }));
 }
 
