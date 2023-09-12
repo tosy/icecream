@@ -379,8 +379,10 @@ void VideoStreamBufferController::MaybeScheduleFrameForRelease()
   // Ensures the frame is scheduled for decode before the stream times out.
   // This is otherwise a race condition.
   max_wait = std::max(max_wait - TimeDelta::Millis(1), TimeDelta::Zero());
+
   //tosy test this code work : max_wait = TimeDelta::Zero();
   max_wait = TimeDelta::Zero();
+
   absl::optional<FrameDecodeTiming::FrameSchedule> schedule;
   while (decodable_tu_info) {
     schedule = decode_timing_.OnFrameBufferUpdated(
