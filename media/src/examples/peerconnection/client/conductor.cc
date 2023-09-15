@@ -228,8 +228,8 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
     std::unique_ptr<webrtc::DesktopCapturer> dcapture_;
     std::unique_ptr<rtc::TaskQueue> worker_queue_;
 
-    volatile size_t width_ = 1280;
-    volatile size_t height_ = 720;
+    volatile size_t width_ = 1920;
+    volatile size_t height_ = 1080;
     volatile int64_t duration_ = 1000/80;   //1000ms / 60fps
     volatile int64_t last_;
 
