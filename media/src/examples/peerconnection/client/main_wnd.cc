@@ -26,7 +26,7 @@ namespace {
 
 
 const char kConnecting[] = "Connecting... ";
-const char kNoVideoStreams[] = "(no video streams either way)";
+//const char kNoVideoStreams[] = "(no video streams either way)";
 const char kNoIncomingStream[] = "(no incoming video)";
 
 
@@ -241,10 +241,10 @@ void MainWnd::OnPaint() {
   RECT rc;
   ::GetClientRect(handle(), &rc);
 
-  VideoRenderer* local_renderer = local_renderer_.get();
+//  VideoRenderer* local_renderer = local_renderer_.get();
   VideoRenderer* remote_renderer = remote_renderer_.get();
-  if (ui_ == STREAMING && remote_renderer && local_renderer) {
-    AutoLock<VideoRenderer> local_lock(local_renderer);
+  if (ui_ == STREAMING && remote_renderer) {       //local_renderer
+//    AutoLock<VideoRenderer> local_lock(local_renderer);
     AutoLock<VideoRenderer> remote_lock(remote_renderer);
 
     const BITMAPINFO& bmi = remote_renderer->bmi();
@@ -313,11 +313,13 @@ void MainWnd::OnPaint() {
       ::SetBkMode(ps.hdc, TRANSPARENT);
 
       std::string text(kConnecting);
+      text += kNoIncomingStream;
+      /*
       if (!local_renderer->image()) {
         text += kNoVideoStreams;
       } else {
         text += kNoIncomingStream;
-      }
+      }*/
       ::DrawTextA(ps.hdc, text.c_str(), -1, &rc,
                   DT_SINGLELINE | DT_CENTER | DT_VCENTER);
       ::SelectObject(ps.hdc, old_font);

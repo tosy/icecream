@@ -96,6 +96,7 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
       //wgc not work
       //options.set_allow_wgc_capturer(true);
       options.set_allow_directx_capturer(true);
+      options.set_prefer_cursor_embedded(true);
 
       auto dcapture = webrtc::DesktopCapturer::CreateScreenCapturer(options);
       // init dcapture
@@ -129,8 +130,6 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
     explicit DesktopVideoSource(std::unique_ptr<webrtc::DesktopCapturer> dcapture)
         : dcapture_(std::move(dcapture)) {
         last_ = rtc::TimeMillis();
-        counts_second_ = 0;
-        pastms_sum_ = 0;
         dcapture_->Start(this);
       
         // make thread for loop catpture desktop
@@ -148,36 +147,22 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
         if (worker_queue_.get()) {
             int64_t cur = rtc::TimeMillis();
             int64_t pastms = cur - last_;
-            if (pastms >= duration_ - last_diff_cost_) {  // backg delay!
+            if (pastms >= duration_) {
                 last_ = cur;
-              last_diff_cost_ = pastms - (duration_ - last_diff_cost_);
-                worker_queue_->PostTask([&] {
-                    dcapture_->CaptureFrame();
-                    counts_second_++;
-                    LoopCaptureInThread();
-                });
-                //counts
+                dcapture_->CaptureFrame();
+                counts_++;
                 pastms_sum_ += pastms;
-                if (pastms_sum_ > 1000) {
+                if (pastms_sum_ > 2000) {
+                  RTC_LOG(LS_INFO) << "TOSY Desktop capture fps::"
+                                   << counts_ / (pastms_sum_/1000);
+                  counts_ = 0;
                   pastms_sum_ = 0;
-                  RTC_LOG(LS_INFO)
-                      << "TOSY Desktop capture fps::" << counts_second_;
-                  counts_second_ = 0;
                 }
-            } else {
-                //process in back thread timer has delay cost! this no delay but cup cost too high.
-                /*
-                worker_queue_->PostTask([&] {
-                  LoopCaptureInThread();
-                });
-                */
-                //RTC_LOG(LS_INFO) << "TOSY Loop duration_-pastms::" << duration_ - pastms;
-                worker_queue_->PostDelayedHighPrecisionTask(
-                    [&]() {
-                    LoopCaptureInThread(); },
-                    webrtc::TimeDelta::Millis(duration_ - last_diff_cost_ - pastms));
-                    
+                pastms = pastms - duration_;
             }
+            worker_queue_->PostDelayedHighPrecisionTask(
+                [&]() { LoopCaptureInThread(); },
+                webrtc::TimeDelta::Millis(duration_-pastms));
         }
     }
     
@@ -205,11 +190,11 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
             i420_buffer->StrideV(), 0, 0, width, height, width, height,
             libyuv::kRotate0, libyuv::FOURCC_ARGB);
 
-//        rtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = i420_buffer->Scale(width_, height_);
+        rtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = i420_buffer->Scale(width_, height_);
 
         webrtc::VideoFrame videoFrame =
             webrtc::VideoFrame::Builder()
-                .set_video_frame_buffer(i420_buffer)  // i420_buffer  buffer
+                .set_video_frame_buffer(buffer)  // i420_buffer  buffer
                 .set_timestamp_rtp(0)
                 .set_timestamp_ms(rtc::TimeMillis())
                 .set_rotation(webrtc::kVideoRotation_0)
@@ -220,18 +205,24 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
         videoFrame.set_capture_time_identifier(cti);
 
         TestVideoCapturer::OnFrame(videoFrame);
-        
-        nTestCount_++;
-        nTestSum_ += rtc::TimeMillis() - cur;
-        if (nTestCount_ >= 120) {
-            RTC_LOG(LS_INFO)
-                << "TOSY test OnCaptureResult::cost " << nTestSum_ / nTestCount_;
-            nTestCount_ = 0;
-            nTestSum_ = 0;
+
+        static int nTestCount = 0;
+        static int64_t nTestSum = 0;
+        static int nTestMax = 0;
+        nTestCount++;
+        auto diff = rtc::TimeMillis() - cur;
+        nTestSum += diff;
+        if (nTestMax < diff) {
+            nTestMax = diff;
+        }
+        if (nTestCount >= 120) {
+            RTC_LOG(LS_INFO) << "TOSY test OnCaptureResult::cost "
+                             << nTestSum / nTestCount << " Max:"<<nTestMax;
+            nTestCount = 0;
+            nTestSum = 0;
+            nTestMax = 0;
         }
     }
-    int nTestCount_ = 0;
-    int nTestSum_ = 0;
 
     webrtc::Mutex lock_;
     std::unique_ptr<webrtc::DesktopCapturer> dcapture_;
@@ -240,11 +231,10 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
     volatile size_t width_ = 1280;
     volatile size_t height_ = 720;
     volatile int64_t duration_ = 1000/80;   //1000ms / 60fps
-    volatile int64_t last_diff_cost_ = 0;   //1000ms / 60fps
     volatile int64_t last_;
 
-    int64_t counts_second_;
-    int64_t pastms_sum_;
+    int64_t counts_ = 0;
+    int64_t pastms_sum_ = 0;
 };
 
 class DesktopCapturerTrackSource : public webrtc::VideoTrackSource {
@@ -755,7 +745,7 @@ void Conductor::AddTracks() {
   
   rtc::scoped_refptr<webrtc::VideoTrackSource> video_device = nullptr;
   if (bTestClient) {
-    video_device = CapturerTrackSource::Create(signaling_thread_.get());
+    //video_device = CapturerTrackSource::Create(signaling_thread_.get());
   } else {
     video_device =
         DesktopCapturerTrackSource::Create(signaling_thread_.get());
@@ -770,11 +760,11 @@ void Conductor::AddTracks() {
 
 //    main_wnd_->StartLocalRenderer(video_track_.get());
     // TOSY TEST 
-    
+    /*
     if (bTestClient) {
         main_wnd_->StartLocalRenderer(video_track_.get());
     }
-
+    */
     /*   not work
     auto vp = std::vector<webrtc::RtpEncodingParameters>(1, webrtc::RtpEncodingParameters{});
     vp[0].min_bitrate_bps = 80000000;
