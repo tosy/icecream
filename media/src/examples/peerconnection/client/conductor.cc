@@ -145,24 +145,40 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
     void LoopCaptureInThread() {
         webrtc::MutexLock lock(&lock_);
         if (worker_queue_.get()) {
-            int64_t cur = rtc::TimeMillis();
-            int64_t pastms = cur - last_;
-            if (pastms >= duration_) {
-                last_ = cur;
-                dcapture_->CaptureFrame();
-                counts_++;
-                pastms_sum_ += pastms;
-                if (pastms_sum_ > 2000) {
-                  RTC_LOG(LS_INFO) << "TOSY Desktop capture fps::"
-                                   << counts_ / (pastms_sum_/1000);
-                  counts_ = 0;
-                  pastms_sum_ = 0;
-                }
-                pastms = pastms - duration_;
+            int64_t cur = rtc::TimeMicros();
+
+            counts_++;
+            past_mcs_sum_ += cur - last_;
+            if (past_mcs_sum_ > 2000000.0) {
+              RTC_LOG(LS_INFO)
+                  << "TOSY Desktop capture fps::" << counts_ / (past_mcs_sum_ / 1000000.0) 
+                  << " thread_err_ " << thread_err_
+                  << " lag_err_ " << lag_err_;
+              counts_ = 0;
+              past_mcs_sum_ = 0;
+
+              if (thread_err_ > 100 || thread_err_ < -100) {
+                lag_err_ += thread_err_;
+                thread_err_ = 0;
+              } 
             }
+            
+            if (last_ == 0) {
+              last_ = cur;
+            }
+
+            auto costDelayErr = cur - last_ - duration_;
+            thread_err_ = thread_err_ * (1 - duration_ / 1000000.0) +
+                          costDelayErr * (duration_ / 1000000.0);
+
+            last_ = cur;
+            dcapture_->CaptureFrame();
+            auto costCapture = rtc::TimeMicros() - cur;
             worker_queue_->PostDelayedHighPrecisionTask(
                 [&]() { LoopCaptureInThread(); },
-                webrtc::TimeDelta::Millis(duration_-pastms));
+                webrtc::TimeDelta::Micros(duration_ - costCapture - thread_err_ - lag_err_)
+            );
+                
         }
     }
     
@@ -178,8 +194,8 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
         // convert to video_frame
         int width = frame->size().width();
         int height = frame->size().height();
-//        width_ = width;
-//        height_ = height;
+        width_ = width;
+        height_ = height;
 
         rtc::scoped_refptr<webrtc::I420Buffer> i420_buffer =
             webrtc::I420Buffer::Create(width, height);
@@ -190,11 +206,11 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
             i420_buffer->StrideV(), 0, 0, width, height, width, height,
             libyuv::kRotate0, libyuv::FOURCC_ARGB);
 
-        rtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = i420_buffer->Scale(width_, height_);
+//        rtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = i420_buffer->Scale(width_, height_);
 
         webrtc::VideoFrame videoFrame =
             webrtc::VideoFrame::Builder()
-                .set_video_frame_buffer(buffer)  // i420_buffer  buffer
+                .set_video_frame_buffer(i420_buffer)  // i420_buffer  buffer
                 .set_timestamp_rtp(0)
                 .set_timestamp_ms(rtc::TimeMillis())
                 .set_rotation(webrtc::kVideoRotation_0)
@@ -216,7 +232,7 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
             nTestMax = diff;
         }
         if (nTestCount >= 120) {
-            RTC_LOG(LS_INFO) << "TOSY test OnCaptureResult::cost "
+            RTC_LOG(LS_INFO) << "TOSY test On CaptureResult::cost "
                              << nTestSum / nTestCount << " Max:"<<nTestMax;
             nTestCount = 0;
             nTestSum = 0;
@@ -228,13 +244,15 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
     std::unique_ptr<webrtc::DesktopCapturer> dcapture_;
     std::unique_ptr<rtc::TaskQueue> worker_queue_;
 
-    volatile size_t width_ = 1920;
-    volatile size_t height_ = 1080;
-    volatile int64_t duration_ = 1000/80;   //1000ms / 60fps
+    volatile size_t width_ = 0;
+    volatile size_t height_ = 0;
+    volatile int64_t duration_ = 1000000/80;   //Micros 80fps 60fps 
     volatile int64_t last_;
 
     int64_t counts_ = 0;
-    int64_t pastms_sum_ = 0;
+    int64_t past_mcs_sum_ = 0;
+    int64_t thread_err_ = 0;
+    int64_t lag_err_ = 0;
 };
 
 class DesktopCapturerTrackSource : public webrtc::VideoTrackSource {
