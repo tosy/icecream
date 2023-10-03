@@ -656,14 +656,18 @@ void FrameCadenceAdapterImpl::OnFrame(const VideoFrame& frame) {
   RTC_DLOG(LS_VERBOSE) << "FrameCadenceAdapterImpl::" << __func__ << " this "
                        << this;
 
+  //tosy test
   int nProcessTasks =
       frames_scheduled_for_processing_.fetch_add(1, std::memory_order_relaxed);
+  
+  // tosy test
   if (nProcessTasks >= 1) {
     // tosy test dropframe before encoder task thread...
     frames_scheduled_for_processing_.fetch_sub(1, std::memory_order_relaxed);
     //RTC_LOG(LS_INFO) << "TOSY dropframe before encoder task thread ;" << nProcessTasks;
     return;
   }
+
   // Local time in webrtc time base.
   Timestamp post_time = clock_->CurrentTime();
 
@@ -679,15 +683,17 @@ void FrameCadenceAdapterImpl::OnFrame(const VideoFrame& frame) {
     }
     /*
     const int frames_scheduled_for_processing =
-        frames_scheduled_for_processing_.fetch_sub(1,
-                                                   std::memory_order_relaxed);
-                                                   */
-    OnFrameOnMainQueue(post_time, 1,          //frames_scheduled_for_processing
+        frames_scheduled_for_processing_.fetch_sub(1,std::memory_order_relaxed);
+
+    OnFrameOnMainQueue(post_time,frames_scheduled_for_processing,std::move(frame));
+    */
+
+    // tosy test
+    OnFrameOnMainQueue(post_time, 1,
                        std::move(frame));
+    frames_scheduled_for_processing_.fetch_sub(1, std::memory_order_relaxed);
 
     MaybeReportFrameRateConstraintUmas();
-
-    frames_scheduled_for_processing_.fetch_sub(1, std::memory_order_relaxed);
 
     // tosy test
     nTestCount++;
