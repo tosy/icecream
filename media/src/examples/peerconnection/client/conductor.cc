@@ -129,7 +129,7 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
    protected:
     explicit DesktopVideoSource(std::unique_ptr<webrtc::DesktopCapturer> dcapture)
         : dcapture_(std::move(dcapture)) {
-        last_ = rtc::TimeMillis();
+        last_ = rtc::TimeMicros();
         dcapture_->Start(this);
       
         // make thread for loop catpture desktop
@@ -146,7 +146,6 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
         webrtc::MutexLock lock(&lock_);
         if (worker_queue_.get()) {
             int64_t cur = rtc::TimeMicros();
-
             counts_++;
             past_mcs_sum_ += cur - last_;
             if (past_mcs_sum_ > 2000000.0) {
@@ -163,22 +162,24 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
               } 
             }
             
-            if (last_ == 0) {
-              last_ = cur;
-            }
-
             auto costDelayErr = cur - last_ - duration_;
+            last_ = cur;
             thread_err_ = thread_err_ * (1 - duration_ / 1000000.0) +
                           costDelayErr * (duration_ / 1000000.0);
 
-            last_ = cur;
             dcapture_->CaptureFrame();
             auto costCapture = rtc::TimeMicros() - cur;
             worker_queue_->PostDelayedHighPrecisionTask(
                 [&]() { LoopCaptureInThread(); },
                 webrtc::TimeDelta::Micros(duration_ - costCapture - thread_err_ - lag_err_)
             );
-                
+
+            // test 
+            /*
+            worker_queue_->PostDelayedHighPrecisionTask(
+                [&]() { LoopCaptureInThread(); },
+                webrtc::TimeDelta::Micros(duration_ - costCapture));
+                */
         }
     }
     
@@ -247,7 +248,7 @@ class DesktopVideoSource : public webrtc::test::TestVideoCapturer,
     volatile size_t width_ = 0;
     volatile size_t height_ = 0;
     volatile int64_t duration_ = 1000000/80;   //Micros 80fps 60fps 
-    volatile int64_t last_;
+    volatile int64_t last_ = 0;
 
     int64_t counts_ = 0;
     int64_t past_mcs_sum_ = 0;
